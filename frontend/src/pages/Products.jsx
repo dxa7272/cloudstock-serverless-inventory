@@ -2,30 +2,78 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router";
 
 import {
-  getProducts,
   deleteProduct,
-  changeStock,
+  getProducts,
 } from "../services/api";
 
-import { isAdmin } from "../services/auth";
+import {
+  getUserGroups,
+} from "../services/auth";
 
 
 function Products() {
   const [products, setProducts] = useState([]);
-  const [admin, setAdmin] = useState(false);
+  const [groups, setGroups] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
 
+  const admin = groups.includes("ADMIN");
+
+
   async function loadProducts() {
     try {
+      setLoading(true);
       setError("");
 
       const data = await getProducts();
 
-      setProducts(data);
+      console.log("PRODUCTS API RESPONSE:", data);
+
+      /*
+       * Supports either:
+       *
+       * [
+       *   {...},
+       *   {...}
+       * ]
+       *
+       * OR:
+       *
+       * {
+       *   products: [...]
+       * }
+       */
+
+      if (Array.isArray(data)) {
+        setProducts(data);
+      } else if (Array.isArray(data?.products)) {
+        setProducts(data.products);
+      } else {
+        console.error(
+          "Unexpected products response:",
+          data
+        );
+
+        setProducts([]);
+
+        setError(
+          "The API returned an unexpected products response."
+        );
+      }
+
     } catch (err) {
-      setError(err.message);
+      console.error(
+        "Failed to load products:",
+        err
+      );
+
+      setProducts([]);
+
+      setError(
+        err.message || "Failed to load products"
+      );
+
     } finally {
       setLoading(false);
     }
@@ -33,21 +81,30 @@ function Products() {
 
 
   useEffect(() => {
-    async function initialize() {
-      const userIsAdmin = await isAdmin();
+    async function initializePage() {
+      try {
+        const userGroups =
+          await getUserGroups();
 
-      setAdmin(userIsAdmin);
+        setGroups(userGroups);
+
+      } catch (err) {
+        console.error(
+          "Failed to load user groups:",
+          err
+        );
+      }
 
       await loadProducts();
     }
 
-    initialize();
+    initializePage();
   }, []);
 
 
   async function handleDelete(productId) {
     const confirmed = window.confirm(
-      "Are you sure you want to delete this product?"
+      `Delete product ${productId}?`
     );
 
     if (!confirmed) {
@@ -57,26 +114,33 @@ function Products() {
     try {
       await deleteProduct(productId);
 
-      await loadProducts();
+      setProducts((currentProducts) =>
+        currentProducts.filter(
+          (product) =>
+            product.productId !== productId
+        )
+      );
+
     } catch (err) {
-      alert(err.message);
-    }
-  }
+      console.error(
+        "Failed to delete product:",
+        err
+      );
 
-
-  async function handleStock(productId, change) {
-    try {
-      await changeStock(productId, change);
-
-      await loadProducts();
-    } catch (err) {
-      alert(err.message);
+      alert(
+        err.message || "Failed to delete product"
+      );
     }
   }
 
 
   if (loading) {
-    return <p>Loading products...</p>;
+    return (
+      <div className="page">
+        <h2>Products</h2>
+        <p>Loading products...</p>
+      </div>
+    );
   }
 
 
@@ -84,145 +148,222 @@ function Products() {
     <div className="page">
 
       <div className="page-header">
-        <h2>Products</h2>
+
+        <div>
+          <h2>Products</h2>
+
+          <p>
+            Manage CloudStock inventory.
+          </p>
+        </div>
+
 
         {admin && (
           <Link
-            className="primary-button"
             to="/products/new"
+            className="primary-button"
           >
             Add Product
           </Link>
         )}
+
       </div>
 
 
       {error && (
-        <p className="error-message">
+        <div className="error-message">
           {error}
-        </p>
+        </div>
       )}
 
 
-      <div className="product-grid">
+      {!error && products.length === 0 && (
+        <div className="empty-state">
 
-        {products.map((product) => (
+          <h3>No products found</h3>
 
-          <div
-            className="product-card"
-            key={product.productId}
-          >
+          <p>
+            There are currently no products
+            in the inventory.
+          </p>
 
-          {product.imageUrl && (
-  <img
-    className="product-image"
-    src={product.imageUrl}
-    alt={product.name}
-  />
-)}
-
-            <h3>{product.name}</h3>
-
-            <p>
-              <strong>SKU:</strong>{" "}
-              {product.sku}
-            </p>
-
-            <p>
-              <strong>Category:</strong>{" "}
-              {product.category}
-            </p>
-
-            <p>
-              <strong>Price:</strong>{" "}
-              ${Number(product.price).toFixed(2)}
-            </p>
-
-            <p>
-              <strong>Stock:</strong>{" "}
-              {product.quantity}
-            </p>
-
-            <p>
-              <strong>Low stock level:</strong>{" "}
-              {product.lowStockLevel}
-            </p>
+        </div>
+      )}
 
 
-            {Number(product.quantity) <=
-              Number(product.lowStockLevel) && (
-              <p className="low-stock">
-                Low Stock
-              </p>
-            )}
+      {products.length > 0 && (
+
+        <div className="table-container">
+
+          <table className="products-table">
+
+            <thead>
+
+              <tr>
+                <th>Image</th>
+                <th>Product</th>
+                <th>SKU</th>
+                <th>Category</th>
+                <th>Price</th>
+                <th>Quantity</th>
+                <th>Low Stock Level</th>
+                <th>Status</th>
+
+                {admin && (
+                  <th>Actions</th>
+                )}
+
+              </tr>
+
+            </thead>
 
 
-            {admin && (
-              <div className="admin-controls">
+            <tbody>
 
-                <div className="stock-buttons">
+              {products.map((product) => {
 
-                  <button
-                    onClick={() =>
-                      handleStock(
-                        product.productId,
-                        -1
-                      )
-                    }
-                  >
-                    -1
-                  </button>
+                const quantity =
+                  Number(product.quantity ?? 0);
 
-                  <button
-                    onClick={() =>
-                      handleStock(
-                        product.productId,
-                        1
-                      )
-                    }
-                  >
-                    +1
-                  </button>
+                const lowStockLevel =
+                  Number(
+                    product.lowStockLevel ?? 0
+                  );
 
-                  <button
-                    onClick={() =>
-                      handleStock(
-                        product.productId,
-                        5
-                      )
-                    }
-                  >
-                    +5
-                  </button>
-
-                </div>
+                const lowStock =
+                  quantity <= lowStockLevel;
 
 
-                <Link
-                  to={`/products/${product.productId}/edit`}
-                >
-                  Edit
-                </Link>
+                return (
+
+                  <tr key={product.productId}>
+
+                    <td>
+
+                      {product.imageUrl ? (
+
+                        <img
+                          src={product.imageUrl}
+                          alt={product.name}
+                          className="product-image"
+                        />
+
+                      ) : (
+
+                        <div className="product-image-placeholder">
+                          No image
+                        </div>
+
+                      )}
+
+                    </td>
 
 
-                <button
-                  onClick={() =>
-                    handleDelete(
-                      product.productId
-                    )
-                  }
-                >
-                  Delete
-                </button>
+                    <td>
 
-              </div>
-            )}
+                      <strong>
+                        {product.name}
+                      </strong>
 
-          </div>
+                      <div className="product-id">
+                        {product.productId}
+                      </div>
 
-        ))}
+                    </td>
 
-      </div>
+
+                    <td>
+                      {product.sku}
+                    </td>
+
+
+                    <td>
+                      {product.category}
+                    </td>
+
+
+                    <td>
+                      $
+                      {Number(
+                        product.price ?? 0
+                      ).toFixed(2)}
+                    </td>
+
+
+                    <td>
+                      {quantity}
+                    </td>
+
+
+                    <td>
+                      {lowStockLevel}
+                    </td>
+
+
+                    <td>
+
+                      {lowStock ? (
+
+                        <span className="status-low">
+                          Low Stock
+                        </span>
+
+                      ) : (
+
+                        <span className="status-good">
+                          In Stock
+                        </span>
+
+                      )}
+
+                    </td>
+
+
+                    {admin && (
+
+                      <td>
+
+                        <div className="table-actions">
+
+                          <Link
+                            to={
+                              `/products/${product.productId}/edit`
+                            }
+                          >
+                            Edit
+                          </Link>
+
+
+                          <button
+                            type="button"
+                            onClick={() =>
+                              handleDelete(
+                                product.productId
+                              )
+                            }
+                          >
+                            Delete
+                          </button>
+
+                        </div>
+
+                      </td>
+
+                    )}
+
+                  </tr>
+
+                );
+
+              })}
+
+            </tbody>
+
+          </table>
+
+        </div>
+
+      )}
 
     </div>
   );

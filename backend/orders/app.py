@@ -14,28 +14,18 @@ logger.setLevel(logging.INFO)
 
 
 dynamodb = boto3.resource("dynamodb")
+dynamodb_client = boto3.client("dynamodb")
 
 
-PRODUCTS_TABLE_NAME = os.environ[
-    "PRODUCTS_TABLE_NAME"
-]
-
-ORDERS_TABLE_NAME = os.environ[
-    "ORDERS_TABLE_NAME"
-]
+PRODUCTS_TABLE_NAME = os.environ["PRODUCTS_TABLE_NAME"]
+ORDERS_TABLE_NAME = os.environ["ORDERS_TABLE_NAME"]
 
 
-products_table = dynamodb.Table(
-    PRODUCTS_TABLE_NAME
-)
-
-orders_table = dynamodb.Table(
-    ORDERS_TABLE_NAME
-)
+products_table = dynamodb.Table(PRODUCTS_TABLE_NAME)
+orders_table = dynamodb.Table(ORDERS_TABLE_NAME)
 
 
 def decimal_default(value):
-
     if isinstance(value, Decimal):
         return float(value)
 
@@ -43,22 +33,16 @@ def decimal_default(value):
 
 
 def response(status_code, body):
-
     return {
-        "statusCode":
-            status_code,
-
+        "statusCode": status_code,
         "headers": {
-            "Content-Type":
-                "application/json"
+            "Content-Type": "application/json"
         },
-
-        "body":
-            json.dumps(
-                body,
-                default=decimal_default,
-                indent=2
-            )
+        "body": json.dumps(
+            body,
+            default=decimal_default,
+            indent=2
+        )
     }
 
 
@@ -84,10 +68,7 @@ def get_user_groups(event):
 
         groups = groups.strip()
 
-        if (
-            groups.startswith("[")
-            and groups.endswith("]")
-        ):
+        if groups.startswith("[") and groups.endswith("]"):
             groups = groups[1:-1]
 
         return [
@@ -95,8 +76,7 @@ def get_user_groups(event):
             .strip()
             .strip('"')
             .strip("'")
-            for group
-            in groups.split(",")
+            for group in groups.split(",")
             if group.strip()
         ]
 
@@ -110,29 +90,18 @@ def scan_all_orders():
     result = orders_table.scan()
 
     orders.extend(
-        result.get(
-            "Items",
-            []
-        )
+        result.get("Items", [])
     )
 
-    while (
-        "LastEvaluatedKey"
-        in result
-    ):
+    while "LastEvaluatedKey" in result:
 
         result = orders_table.scan(
             ExclusiveStartKey=
-                result[
-                    "LastEvaluatedKey"
-                ]
+                result["LastEvaluatedKey"]
         )
 
         orders.extend(
-            result.get(
-                "Items",
-                []
-            )
+            result.get("Items", [])
         )
 
     return orders
@@ -149,14 +118,12 @@ def lambda_handler(event, context):
             .get("method")
         )
 
-        groups = get_user_groups(
-            event
-        )
+        groups = get_user_groups(event)
 
 
         # ====================================================
         # GET /orders
-        # ADMIN
+        # ADMIN ONLY
         # ====================================================
 
         if method == "GET":
@@ -190,7 +157,7 @@ def lambda_handler(event, context):
 
         # ====================================================
         # POST /orders
-        # ADMIN + EMPLOYEE
+        # ADMIN OR EMPLOYEE
         # ====================================================
 
         if method == "POST":
@@ -205,25 +172,18 @@ def lambda_handler(event, context):
                     403,
                     {
                         "message":
-                            "Employee or Admin "
-                            "access required"
+                            "Employee or Admin access required"
                     }
                 )
 
+
             body = json.loads(
-                event.get(
-                    "body",
-                    "{}"
-                )
+                event.get("body", "{}")
             )
 
-            product_id = body.get(
-                "productId"
-            )
+            product_id = body.get("productId")
+            order_quantity = body.get("quantity")
 
-            order_quantity = body.get(
-                "quantity"
-            )
 
             if (
                 not product_id
@@ -235,14 +195,27 @@ def lambda_handler(event, context):
                     400,
                     {
                         "message":
-                            "productId and quantity "
-                            "are required"
+                            "productId and quantity are required"
                     }
                 )
 
-            order_quantity = Decimal(
-                str(order_quantity)
-            )
+
+            try:
+
+                order_quantity = Decimal(
+                    str(order_quantity)
+                )
+
+            except Exception:
+
+                return response(
+                    400,
+                    {
+                        "message":
+                            "quantity must be a valid number"
+                    }
+                )
+
 
             if order_quantity <= 0:
 
@@ -250,25 +223,21 @@ def lambda_handler(event, context):
                     400,
                     {
                         "message":
-                            "quantity must be "
-                            "greater than 0"
+                            "quantity must be greater than 0"
                     }
                 )
 
-            product_result = (
-                products_table.get_item(
-                    Key={
-                        "productId":
-                            product_id
-                    }
-                )
+
+            product_result = products_table.get_item(
+                Key={
+                    "productId": product_id
+                }
             )
 
-            product = (
-                product_result.get(
-                    "Item"
-                )
+            product = product_result.get(
+                "Item"
             )
+
 
             if not product:
 
@@ -280,35 +249,135 @@ def lambda_handler(event, context):
                     }
                 )
 
-            if (
-                product["quantity"]
-                < order_quantity
-            ):
 
-                return response(
-                    400,
-                    {
-                        "message":
-                            "Insufficient stock",
-
-                        "availableQuantity":
-                            product["quantity"]
-                    }
-                )
-
-            unit_price = (
-                product["price"]
-            )
+            unit_price = product["price"]
 
             total = (
                 unit_price
                 * order_quantity
             )
 
+
             order_id = (
                 "order-"
                 + str(uuid.uuid4())
             )
+
+
+            created_at = (
+                datetime.now(
+                    timezone.utc
+                ).isoformat()
+            )
+
+
+            try:
+
+                dynamodb_client.transact_write_items(
+
+                    TransactItems=[
+
+                        {
+                            "Update": {
+
+                                "TableName":
+                                    PRODUCTS_TABLE_NAME,
+
+                                "Key": {
+                                    "productId": {
+                                        "S": product_id
+                                    }
+                                },
+
+                                "UpdateExpression":
+                                    "SET quantity = quantity - :amount",
+
+                                "ConditionExpression":
+                                    "attribute_exists(productId) "
+                                    "AND quantity >= :amount",
+
+                                "ExpressionAttributeValues": {
+                                    ":amount": {
+                                        "N": str(order_quantity)
+                                    }
+                                }
+                            }
+                        },
+
+                        {
+                            "Put": {
+
+                                "TableName":
+                                    ORDERS_TABLE_NAME,
+
+                                "Item": {
+
+                                    "orderId": {
+                                        "S": order_id
+                                    },
+
+                                    "productId": {
+                                        "S": product_id
+                                    },
+
+                                    "productName": {
+                                        "S": product["name"]
+                                    },
+
+                                    "quantity": {
+                                        "N": str(order_quantity)
+                                    },
+
+                                    "unitPrice": {
+                                        "N": str(unit_price)
+                                    },
+
+                                    "total": {
+                                        "N": str(total)
+                                    },
+
+                                    "status": {
+                                        "S": "CONFIRMED"
+                                    },
+
+                                    "createdAt": {
+                                        "S": created_at
+                                    }
+                                },
+
+                                "ConditionExpression":
+                                    "attribute_not_exists(orderId)"
+                            }
+                        }
+                    ]
+                )
+
+
+            except ClientError as error:
+
+                error_code = (
+                    error.response["Error"]["Code"]
+                )
+
+                logger.exception(
+                    "Order transaction failed"
+                )
+
+                if error_code in [
+                    "TransactionCanceledException",
+                    "ConditionalCheckFailedException"
+                ]:
+
+                    return response(
+                        400,
+                        {
+                            "message":
+                                "Insufficient stock or order could not be created"
+                        }
+                    )
+
+                raise
+
 
             order = {
 
@@ -334,36 +403,9 @@ def lambda_handler(event, context):
                     "CONFIRMED",
 
                 "createdAt":
-                    datetime.now(
-                        timezone.utc
-                    ).isoformat()
+                    created_at
             }
 
-            products_table.update_item(
-
-                Key={
-                    "productId":
-                        product_id
-                },
-
-                UpdateExpression=(
-                    "SET quantity = "
-                    "quantity - :amount"
-                ),
-
-                ConditionExpression=(
-                    "quantity >= :amount"
-                ),
-
-                ExpressionAttributeValues={
-                    ":amount":
-                        order_quantity
-                }
-            )
-
-            orders_table.put_item(
-                Item=order
-            )
 
             return response(
                 201,
@@ -386,36 +428,18 @@ def lambda_handler(event, context):
         )
 
 
-    except ClientError as error:
-
-        logger.exception(
-            "AWS error while handling order"
-        )
-
-        if (
-            error.response["Error"]["Code"]
-            ==
-            "ConditionalCheckFailedException"
-        ):
-
-            return response(
-                400,
-                {
-                    "message":
-                        "Insufficient stock"
-                }
-            )
+    except json.JSONDecodeError:
 
         return response(
-            500,
+            400,
             {
                 "message":
-                    "Internal server error"
+                    "Invalid JSON body"
             }
         )
 
 
-    except Exception as error:
+    except Exception:
 
         logger.exception(
             "Unexpected Orders Lambda error"

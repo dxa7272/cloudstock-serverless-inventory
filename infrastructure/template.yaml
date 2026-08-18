@@ -24,6 +24,7 @@ Resources:
 
   CloudStockHttpApi:
     Type: AWS::Serverless::HttpApi
+
     Properties:
 
       StageName: $default
@@ -52,6 +53,7 @@ Resources:
 
   ProductsTable:
     Type: AWS::DynamoDB::Table
+
     Properties:
 
       TableName:
@@ -82,6 +84,7 @@ Resources:
 
   OrdersTable:
     Type: AWS::DynamoDB::Table
+
     Properties:
 
       TableName:
@@ -102,11 +105,12 @@ Resources:
 
 
   # ==========================================================
-  # SNS
+  # SNS TOPIC
   # ==========================================================
 
   LowStockTopic:
     Type: AWS::SNS::Topic
+
     Properties:
 
       TopicName:
@@ -114,11 +118,12 @@ Resources:
 
 
   # ==========================================================
-  # S3
+  # S3 PRODUCT IMAGE BUCKET
   # ==========================================================
 
   ProductImagesBucket:
     Type: AWS::S3::Bucket
+
     Properties:
 
       BucketName: !Sub
@@ -138,6 +143,7 @@ Resources:
 
   ProductsFunction:
     Type: AWS::Serverless::Function
+
     Properties:
 
       FunctionName:
@@ -182,80 +188,121 @@ Resources:
 
         GetProducts:
           Type: HttpApi
+
           Properties:
+
             ApiId:
               !Ref CloudStockHttpApi
-            Path: /products
-            Method: GET
+
+            Path:
+              /products
+
+            Method:
+              GET
 
 
         CreateProduct:
           Type: HttpApi
+
           Properties:
+
             ApiId:
               !Ref CloudStockHttpApi
-            Path: /products
-            Method: POST
+
+            Path:
+              /products
+
+            Method:
+              POST
 
             Auth:
+
               Authorizer:
                 CloudStockJwtAuthorizer
 
 
         GetProduct:
           Type: HttpApi
+
           Properties:
+
             ApiId:
               !Ref CloudStockHttpApi
-            Path: /products/{productId}
-            Method: GET
+
+            Path:
+              /products/{productId}
+
+            Method:
+              GET
 
 
         UpdateProduct:
           Type: HttpApi
+
           Properties:
+
             ApiId:
               !Ref CloudStockHttpApi
-            Path: /products/{productId}
-            Method: PUT
+
+            Path:
+              /products/{productId}
+
+            Method:
+              PUT
 
             Auth:
+
               Authorizer:
                 CloudStockJwtAuthorizer
 
 
         DeleteProduct:
           Type: HttpApi
+
           Properties:
+
             ApiId:
               !Ref CloudStockHttpApi
-            Path: /products/{productId}
-            Method: DELETE
+
+            Path:
+              /products/{productId}
+
+            Method:
+              DELETE
 
             Auth:
+
               Authorizer:
                 CloudStockJwtAuthorizer
 
 
         UpdateStock:
           Type: HttpApi
+
           Properties:
+
             ApiId:
               !Ref CloudStockHttpApi
-            Path: /products/{productId}/stock
-            Method: PATCH
+
+            Path:
+              /products/{productId}/stock
+
+            Method:
+              PATCH
 
             Auth:
+
               Authorizer:
                 CloudStockJwtAuthorizer
 
 
-  # ==========================================================
+    # ==========================================================
   # ORDERS LAMBDA
   # ==========================================================
 
   OrdersFunction:
     Type: AWS::Serverless::Function
+
     Properties:
 
       FunctionName:
@@ -295,11 +342,25 @@ Resources:
             TableName:
               !Ref OrdersTable
 
+        - Statement:
+
+            - Effect: Allow
+
+              Action:
+                - dynamodb:TransactWriteItems
+
+              Resource:
+
+                - !GetAtt ProductsTable.Arn
+
+                - !GetAtt OrdersTable.Arn
+
 
       Events:
 
         CreateOrder:
           Type: HttpApi
+
           Properties:
 
             ApiId:
@@ -312,12 +373,14 @@ Resources:
               POST
 
             Auth:
+
               Authorizer:
                 CloudStockJwtAuthorizer
 
 
         GetOrders:
           Type: HttpApi
+
           Properties:
 
             ApiId:
@@ -330,6 +393,7 @@ Resources:
               GET
 
             Auth:
+
               Authorizer:
                 CloudStockJwtAuthorizer
 
@@ -340,6 +404,7 @@ Resources:
 
   AnalyticsFunction:
     Type: AWS::Serverless::Function
+
     Properties:
 
       FunctionName:
@@ -384,6 +449,7 @@ Resources:
 
         GetAnalytics:
           Type: HttpApi
+
           Properties:
 
             ApiId:
@@ -396,16 +462,18 @@ Resources:
               GET
 
             Auth:
+
               Authorizer:
                 CloudStockJwtAuthorizer
 
 
   # ==========================================================
-  # LOW-STOCK LAMBDA
+  # LOW STOCK LAMBDA
   # ==========================================================
 
   LowStockFunction:
     Type: AWS::Serverless::Function
+
     Properties:
 
       FunctionName:
@@ -437,21 +505,18 @@ Resources:
         - SNSPublishMessagePolicy:
 
             TopicName:
-              !GetAtt
-                - LowStockTopic
-                - TopicName
+              !GetAtt LowStockTopic.TopicName
 
 
       Events:
 
         ProductStream:
           Type: DynamoDB
+
           Properties:
 
             Stream:
-              !GetAtt
-                - ProductsTable
-                - StreamArn
+              !GetAtt ProductsTable.StreamArn
 
             StartingPosition:
               LATEST
@@ -477,11 +542,17 @@ Outputs:
 
   ProductsTableName:
 
+    Description:
+      Products DynamoDB table name
+
     Value:
       !Ref ProductsTable
 
 
   OrdersTableName:
+
+    Description:
+      Orders DynamoDB table name
 
     Value:
       !Ref OrdersTable
@@ -489,11 +560,17 @@ Outputs:
 
   ProductImagesBucketName:
 
+    Description:
+      Product image S3 bucket name
+
     Value:
       !Ref ProductImagesBucket
 
 
   LowStockTopicArn:
+
+    Description:
+      SNS topic ARN for low-stock alerts
 
     Value:
       !Ref LowStockTopic
