@@ -3,9 +3,7 @@ Transform: AWS::Serverless-2016-10-31
 
 Description: CloudStock Serverless Inventory Application
 
-
 Parameters:
-
   CognitoUserPoolId:
     Type: String
     Description: Existing CloudStock Cognito User Pool ID
@@ -17,31 +15,41 @@ Parameters:
 
 Resources:
 
-
   # ==========================================================
   # HTTP API
   # ==========================================================
 
   CloudStockHttpApi:
     Type: AWS::Serverless::HttpApi
-
     Properties:
-
       StageName: $default
 
+      CorsConfiguration:
+        AllowOrigins:
+          - "http://localhost:5173"
+          - "https://main.d37llxu4b92i3z.amplifyapp.com"
+
+        AllowHeaders:
+          - "authorization"
+          - "content-type"
+
+        AllowMethods:
+          - "GET"
+          - "POST"
+          - "PUT"
+          - "PATCH"
+          - "DELETE"
+          - "OPTIONS"
+
+        MaxAge: 600
+
       Auth:
-
         Authorizers:
-
           CloudStockJwtAuthorizer:
-
-            IdentitySource:
-              "$request.header.Authorization"
+            IdentitySource: "$request.header.Authorization"
 
             JwtConfiguration:
-
-              issuer: !Sub
-                "https://cognito-idp.${AWS::Region}.amazonaws.com/${CognitoUserPoolId}"
+              issuer: !Sub "https://cognito-idp.${AWS::Region}.amazonaws.com/${CognitoUserPoolId}"
 
               audience:
                 - !Ref CognitoClientId
@@ -53,29 +61,20 @@ Resources:
 
   ProductsTable:
     Type: AWS::DynamoDB::Table
-
     Properties:
-
-      TableName:
-        CloudStock-Products-SAM
-
-      BillingMode:
-        PAY_PER_REQUEST
+      TableName: CloudStock-Products-SAM
+      BillingMode: PAY_PER_REQUEST
 
       AttributeDefinitions:
-
         - AttributeName: productId
           AttributeType: S
 
       KeySchema:
-
         - AttributeName: productId
           KeyType: HASH
 
       StreamSpecification:
-
-        StreamViewType:
-          NEW_AND_OLD_IMAGES
+        StreamViewType: NEW_AND_OLD_IMAGES
 
 
   # ==========================================================
@@ -84,22 +83,15 @@ Resources:
 
   OrdersTable:
     Type: AWS::DynamoDB::Table
-
     Properties:
-
-      TableName:
-        CloudStock-Orders-SAM
-
-      BillingMode:
-        PAY_PER_REQUEST
+      TableName: CloudStock-Orders-SAM
+      BillingMode: PAY_PER_REQUEST
 
       AttributeDefinitions:
-
         - AttributeName: orderId
           AttributeType: S
 
       KeySchema:
-
         - AttributeName: orderId
           KeyType: HASH
 
@@ -110,11 +102,8 @@ Resources:
 
   LowStockTopic:
     Type: AWS::SNS::Topic
-
     Properties:
-
-      TopicName:
-        CloudStock-Low-Stock-Alerts-SAM
+      TopicName: CloudStock-Low-Stock-Alerts-SAM
 
 
   # ==========================================================
@@ -123,14 +112,10 @@ Resources:
 
   ProductImagesBucket:
     Type: AWS::S3::Bucket
-
     Properties:
-
-      BucketName: !Sub
-        "cloudstock-product-images-sam-${AWS::AccountId}"
+      BucketName: !Sub "cloudstock-product-images-sam-${AWS::AccountId}"
 
       PublicAccessBlockConfiguration:
-
         BlockPublicAcls: true
         IgnorePublicAcls: true
         BlockPublicPolicy: true
@@ -143,259 +128,136 @@ Resources:
 
   ProductsFunction:
     Type: AWS::Serverless::Function
-
     Properties:
-
-      FunctionName:
-        cloudstock-products-sam
-
-      Runtime:
-        python3.14
+      FunctionName: cloudstock-products-sam
+      Runtime: python3.14
 
       Architectures:
         - x86_64
 
-      Handler:
-        app.lambda_handler
-
-      CodeUri:
-        ../backend/products/
-
+      Handler: app.lambda_handler
+      CodeUri: ../backend/products/
 
       Environment:
-
         Variables:
-
-          PRODUCTS_TABLE_NAME:
-            !Ref ProductsTable
-
-          IMAGE_BUCKET:
-            !Ref ProductImagesBucket
-
+          PRODUCTS_TABLE_NAME: !Ref ProductsTable
+          IMAGE_BUCKET: !Ref ProductImagesBucket
 
       Policies:
-
         - DynamoDBCrudPolicy:
-            TableName:
-              !Ref ProductsTable
+            TableName: !Ref ProductsTable
 
         - S3ReadPolicy:
-            BucketName:
-              !Ref ProductImagesBucket
-
+            BucketName: !Ref ProductImagesBucket
 
       Events:
 
         GetProducts:
           Type: HttpApi
-
           Properties:
-
-            ApiId:
-              !Ref CloudStockHttpApi
-
-            Path:
-              /products
-
-            Method:
-              GET
-
+            ApiId: !Ref CloudStockHttpApi
+            Path: /products
+            Method: GET
 
         CreateProduct:
           Type: HttpApi
-
           Properties:
-
-            ApiId:
-              !Ref CloudStockHttpApi
-
-            Path:
-              /products
-
-            Method:
-              POST
-
+            ApiId: !Ref CloudStockHttpApi
+            Path: /products
+            Method: POST
             Auth:
-
-              Authorizer:
-                CloudStockJwtAuthorizer
-
+              Authorizer: CloudStockJwtAuthorizer
 
         GetProduct:
           Type: HttpApi
-
           Properties:
-
-            ApiId:
-              !Ref CloudStockHttpApi
-
-            Path:
-              /products/{productId}
-
-            Method:
-              GET
-
+            ApiId: !Ref CloudStockHttpApi
+            Path: /products/{productId}
+            Method: GET
 
         UpdateProduct:
           Type: HttpApi
-
           Properties:
-
-            ApiId:
-              !Ref CloudStockHttpApi
-
-            Path:
-              /products/{productId}
-
-            Method:
-              PUT
-
+            ApiId: !Ref CloudStockHttpApi
+            Path: /products/{productId}
+            Method: PUT
             Auth:
-
-              Authorizer:
-                CloudStockJwtAuthorizer
-
+              Authorizer: CloudStockJwtAuthorizer
 
         DeleteProduct:
           Type: HttpApi
-
           Properties:
-
-            ApiId:
-              !Ref CloudStockHttpApi
-
-            Path:
-              /products/{productId}
-
-            Method:
-              DELETE
-
+            ApiId: !Ref CloudStockHttpApi
+            Path: /products/{productId}
+            Method: DELETE
             Auth:
-
-              Authorizer:
-                CloudStockJwtAuthorizer
-
+              Authorizer: CloudStockJwtAuthorizer
 
         UpdateStock:
           Type: HttpApi
-
           Properties:
-
-            ApiId:
-              !Ref CloudStockHttpApi
-
-            Path:
-              /products/{productId}/stock
-
-            Method:
-              PATCH
-
+            ApiId: !Ref CloudStockHttpApi
+            Path: /products/{productId}/stock
+            Method: PATCH
             Auth:
-
-              Authorizer:
-                CloudStockJwtAuthorizer
+              Authorizer: CloudStockJwtAuthorizer
 
 
-    # ==========================================================
+  # ==========================================================
   # ORDERS LAMBDA
   # ==========================================================
 
   OrdersFunction:
     Type: AWS::Serverless::Function
-
     Properties:
-
-      FunctionName:
-        cloudstock-create-order-sam
-
-      Runtime:
-        python3.14
+      FunctionName: cloudstock-create-order-sam
+      Runtime: python3.14
 
       Architectures:
         - x86_64
 
-      Handler:
-        app.lambda_handler
-
-      CodeUri:
-        ../backend/orders/
-
+      Handler: app.lambda_handler
+      CodeUri: ../backend/orders/
 
       Environment:
-
         Variables:
-
-          PRODUCTS_TABLE_NAME:
-            !Ref ProductsTable
-
-          ORDERS_TABLE_NAME:
-            !Ref OrdersTable
-
+          PRODUCTS_TABLE_NAME: !Ref ProductsTable
+          ORDERS_TABLE_NAME: !Ref OrdersTable
 
       Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ProductsTable
 
         - DynamoDBCrudPolicy:
-            TableName:
-              !Ref ProductsTable
-
-        - DynamoDBCrudPolicy:
-            TableName:
-              !Ref OrdersTable
+            TableName: !Ref OrdersTable
 
         - Statement:
-
             - Effect: Allow
-
               Action:
                 - dynamodb:TransactWriteItems
-
               Resource:
-
                 - !GetAtt ProductsTable.Arn
-
                 - !GetAtt OrdersTable.Arn
-
 
       Events:
 
         CreateOrder:
           Type: HttpApi
-
           Properties:
-
-            ApiId:
-              !Ref CloudStockHttpApi
-
-            Path:
-              /orders
-
-            Method:
-              POST
-
+            ApiId: !Ref CloudStockHttpApi
+            Path: /orders
+            Method: POST
             Auth:
-
-              Authorizer:
-                CloudStockJwtAuthorizer
-
+              Authorizer: CloudStockJwtAuthorizer
 
         GetOrders:
           Type: HttpApi
-
           Properties:
-
-            ApiId:
-              !Ref CloudStockHttpApi
-
-            Path:
-              /orders
-
-            Method:
-              GET
-
+            ApiId: !Ref CloudStockHttpApi
+            Path: /orders
+            Method: GET
             Auth:
-
-              Authorizer:
-                CloudStockJwtAuthorizer
+              Authorizer: CloudStockJwtAuthorizer
 
 
   # ==========================================================
@@ -404,67 +266,38 @@ Resources:
 
   AnalyticsFunction:
     Type: AWS::Serverless::Function
-
     Properties:
-
-      FunctionName:
-        cloudstock-analytics-sam
-
-      Runtime:
-        python3.14
+      FunctionName: cloudstock-analytics-sam
+      Runtime: python3.14
 
       Architectures:
         - x86_64
 
-      Handler:
-        app.lambda_handler
-
-      CodeUri:
-        ../backend/analytics/
-
+      Handler: app.lambda_handler
+      CodeUri: ../backend/analytics/
 
       Environment:
-
         Variables:
-
-          PRODUCTS_TABLE_NAME:
-            !Ref ProductsTable
-
-          ORDERS_TABLE_NAME:
-            !Ref OrdersTable
-
+          PRODUCTS_TABLE_NAME: !Ref ProductsTable
+          ORDERS_TABLE_NAME: !Ref OrdersTable
 
       Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref ProductsTable
 
         - DynamoDBReadPolicy:
-            TableName:
-              !Ref ProductsTable
-
-        - DynamoDBReadPolicy:
-            TableName:
-              !Ref OrdersTable
-
+            TableName: !Ref OrdersTable
 
       Events:
 
         GetAnalytics:
           Type: HttpApi
-
           Properties:
-
-            ApiId:
-              !Ref CloudStockHttpApi
-
-            Path:
-              /analytics
-
-            Method:
-              GET
-
+            ApiId: !Ref CloudStockHttpApi
+            Path: /analytics
+            Method: GET
             Auth:
-
-              Authorizer:
-                CloudStockJwtAuthorizer
+              Authorizer: CloudStockJwtAuthorizer
 
 
   # ==========================================================
@@ -473,104 +306,53 @@ Resources:
 
   LowStockFunction:
     Type: AWS::Serverless::Function
-
     Properties:
-
-      FunctionName:
-        cloudstock-low-stock-alert-sam
-
-      Runtime:
-        python3.14
+      FunctionName: cloudstock-low-stock-alert-sam
+      Runtime: python3.14
 
       Architectures:
         - x86_64
 
-      Handler:
-        app.lambda_handler
-
-      CodeUri:
-        ../backend/low-stock/
-
+      Handler: app.lambda_handler
+      CodeUri: ../backend/low-stock/
 
       Environment:
-
         Variables:
-
-          SNS_TOPIC_ARN:
-            !Ref LowStockTopic
-
+          SNS_TOPIC_ARN: !Ref LowStockTopic
 
       Policies:
-
         - SNSPublishMessagePolicy:
-
-            TopicName:
-              !GetAtt LowStockTopic.TopicName
-
+            TopicName: !GetAtt LowStockTopic.TopicName
 
       Events:
 
         ProductStream:
           Type: DynamoDB
-
           Properties:
-
-            Stream:
-              !GetAtt ProductsTable.StreamArn
-
-            StartingPosition:
-              LATEST
-
-            BatchSize:
-              10
-
-            Enabled:
-              true
+            Stream: !GetAtt ProductsTable.StreamArn
+            StartingPosition: LATEST
+            BatchSize: 10
+            Enabled: true
 
 
 Outputs:
 
-
   ApiUrl:
-
-    Description:
-      CloudStock SAM API URL
-
-    Value: !Sub
-      "https://${CloudStockHttpApi}.execute-api.${AWS::Region}.amazonaws.com"
-
+    Description: CloudStock SAM API URL
+    Value: !Sub "https://${CloudStockHttpApi}.execute-api.${AWS::Region}.amazonaws.com"
 
   ProductsTableName:
-
-    Description:
-      Products DynamoDB table name
-
-    Value:
-      !Ref ProductsTable
-
+    Description: Products DynamoDB table
+    Value: !Ref ProductsTable
 
   OrdersTableName:
-
-    Description:
-      Orders DynamoDB table name
-
-    Value:
-      !Ref OrdersTable
-
+    Description: Orders DynamoDB table
+    Value: !Ref OrdersTable
 
   ProductImagesBucketName:
-
-    Description:
-      Product image S3 bucket name
-
-    Value:
-      !Ref ProductImagesBucket
-
+    Description: Product images S3 bucket
+    Value: !Ref ProductImagesBucket
 
   LowStockTopicArn:
-
-    Description:
-      SNS topic ARN for low-stock alerts
-
-    Value:
-      !Ref LowStockTopic
+    Description: Low stock SNS topic
+    Value: !Ref LowStockTopic
