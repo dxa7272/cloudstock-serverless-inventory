@@ -1,0 +1,499 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+
+Description: CloudStock Serverless Inventory Application
+
+
+Parameters:
+
+  CognitoUserPoolId:
+    Type: String
+    Description: Existing CloudStock Cognito User Pool ID
+
+  CognitoClientId:
+    Type: String
+    Description: Existing CloudStock Cognito App Client ID
+
+
+Resources:
+
+
+  # ==========================================================
+  # HTTP API
+  # ==========================================================
+
+  CloudStockHttpApi:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+
+      StageName: $default
+
+      Auth:
+
+        Authorizers:
+
+          CloudStockJwtAuthorizer:
+
+            IdentitySource:
+              "$request.header.Authorization"
+
+            JwtConfiguration:
+
+              issuer: !Sub
+                "https://cognito-idp.${AWS::Region}.amazonaws.com/${CognitoUserPoolId}"
+
+              audience:
+                - !Ref CognitoClientId
+
+
+  # ==========================================================
+  # PRODUCTS TABLE
+  # ==========================================================
+
+  ProductsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+
+      TableName:
+        CloudStock-Products-SAM
+
+      BillingMode:
+        PAY_PER_REQUEST
+
+      AttributeDefinitions:
+
+        - AttributeName: productId
+          AttributeType: S
+
+      KeySchema:
+
+        - AttributeName: productId
+          KeyType: HASH
+
+      StreamSpecification:
+
+        StreamViewType:
+          NEW_AND_OLD_IMAGES
+
+
+  # ==========================================================
+  # ORDERS TABLE
+  # ==========================================================
+
+  OrdersTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+
+      TableName:
+        CloudStock-Orders-SAM
+
+      BillingMode:
+        PAY_PER_REQUEST
+
+      AttributeDefinitions:
+
+        - AttributeName: orderId
+          AttributeType: S
+
+      KeySchema:
+
+        - AttributeName: orderId
+          KeyType: HASH
+
+
+  # ==========================================================
+  # SNS
+  # ==========================================================
+
+  LowStockTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+
+      TopicName:
+        CloudStock-Low-Stock-Alerts-SAM
+
+
+  # ==========================================================
+  # S3
+  # ==========================================================
+
+  ProductImagesBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+
+      BucketName: !Sub
+        "cloudstock-product-images-sam-${AWS::AccountId}"
+
+      PublicAccessBlockConfiguration:
+
+        BlockPublicAcls: true
+        IgnorePublicAcls: true
+        BlockPublicPolicy: true
+        RestrictPublicBuckets: true
+
+
+  # ==========================================================
+  # PRODUCTS LAMBDA
+  # ==========================================================
+
+  ProductsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+
+      FunctionName:
+        cloudstock-products-sam
+
+      Runtime:
+        python3.14
+
+      Architectures:
+        - x86_64
+
+      Handler:
+        app.lambda_handler
+
+      CodeUri:
+        ../backend/products/
+
+
+      Environment:
+
+        Variables:
+
+          PRODUCTS_TABLE_NAME:
+            !Ref ProductsTable
+
+          IMAGE_BUCKET:
+            !Ref ProductImagesBucket
+
+
+      Policies:
+
+        - DynamoDBCrudPolicy:
+            TableName:
+              !Ref ProductsTable
+
+        - S3ReadPolicy:
+            BucketName:
+              !Ref ProductImagesBucket
+
+
+      Events:
+
+        GetProducts:
+          Type: HttpApi
+          Properties:
+            ApiId:
+              !Ref CloudStockHttpApi
+            Path: /products
+            Method: GET
+
+
+        CreateProduct:
+          Type: HttpApi
+          Properties:
+            ApiId:
+              !Ref CloudStockHttpApi
+            Path: /products
+            Method: POST
+
+            Auth:
+              Authorizer:
+                CloudStockJwtAuthorizer
+
+
+        GetProduct:
+          Type: HttpApi
+          Properties:
+            ApiId:
+              !Ref CloudStockHttpApi
+            Path: /products/{productId}
+            Method: GET
+
+
+        UpdateProduct:
+          Type: HttpApi
+          Properties:
+            ApiId:
+              !Ref CloudStockHttpApi
+            Path: /products/{productId}
+            Method: PUT
+
+            Auth:
+              Authorizer:
+                CloudStockJwtAuthorizer
+
+
+        DeleteProduct:
+          Type: HttpApi
+          Properties:
+            ApiId:
+              !Ref CloudStockHttpApi
+            Path: /products/{productId}
+            Method: DELETE
+
+            Auth:
+              Authorizer:
+                CloudStockJwtAuthorizer
+
+
+        UpdateStock:
+          Type: HttpApi
+          Properties:
+            ApiId:
+              !Ref CloudStockHttpApi
+            Path: /products/{productId}/stock
+            Method: PATCH
+
+            Auth:
+              Authorizer:
+                CloudStockJwtAuthorizer
+
+
+  # ==========================================================
+  # ORDERS LAMBDA
+  # ==========================================================
+
+  OrdersFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+
+      FunctionName:
+        cloudstock-create-order-sam
+
+      Runtime:
+        python3.14
+
+      Architectures:
+        - x86_64
+
+      Handler:
+        app.lambda_handler
+
+      CodeUri:
+        ../backend/orders/
+
+
+      Environment:
+
+        Variables:
+
+          PRODUCTS_TABLE_NAME:
+            !Ref ProductsTable
+
+          ORDERS_TABLE_NAME:
+            !Ref OrdersTable
+
+
+      Policies:
+
+        - DynamoDBCrudPolicy:
+            TableName:
+              !Ref ProductsTable
+
+        - DynamoDBCrudPolicy:
+            TableName:
+              !Ref OrdersTable
+
+
+      Events:
+
+        CreateOrder:
+          Type: HttpApi
+          Properties:
+
+            ApiId:
+              !Ref CloudStockHttpApi
+
+            Path:
+              /orders
+
+            Method:
+              POST
+
+            Auth:
+              Authorizer:
+                CloudStockJwtAuthorizer
+
+
+        GetOrders:
+          Type: HttpApi
+          Properties:
+
+            ApiId:
+              !Ref CloudStockHttpApi
+
+            Path:
+              /orders
+
+            Method:
+              GET
+
+            Auth:
+              Authorizer:
+                CloudStockJwtAuthorizer
+
+
+  # ==========================================================
+  # ANALYTICS LAMBDA
+  # ==========================================================
+
+  AnalyticsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+
+      FunctionName:
+        cloudstock-analytics-sam
+
+      Runtime:
+        python3.14
+
+      Architectures:
+        - x86_64
+
+      Handler:
+        app.lambda_handler
+
+      CodeUri:
+        ../backend/analytics/
+
+
+      Environment:
+
+        Variables:
+
+          PRODUCTS_TABLE_NAME:
+            !Ref ProductsTable
+
+          ORDERS_TABLE_NAME:
+            !Ref OrdersTable
+
+
+      Policies:
+
+        - DynamoDBReadPolicy:
+            TableName:
+              !Ref ProductsTable
+
+        - DynamoDBReadPolicy:
+            TableName:
+              !Ref OrdersTable
+
+
+      Events:
+
+        GetAnalytics:
+          Type: HttpApi
+          Properties:
+
+            ApiId:
+              !Ref CloudStockHttpApi
+
+            Path:
+              /analytics
+
+            Method:
+              GET
+
+            Auth:
+              Authorizer:
+                CloudStockJwtAuthorizer
+
+
+  # ==========================================================
+  # LOW-STOCK LAMBDA
+  # ==========================================================
+
+  LowStockFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+
+      FunctionName:
+        cloudstock-low-stock-alert-sam
+
+      Runtime:
+        python3.14
+
+      Architectures:
+        - x86_64
+
+      Handler:
+        app.lambda_handler
+
+      CodeUri:
+        ../backend/low-stock/
+
+
+      Environment:
+
+        Variables:
+
+          SNS_TOPIC_ARN:
+            !Ref LowStockTopic
+
+
+      Policies:
+
+        - SNSPublishMessagePolicy:
+
+            TopicName:
+              !GetAtt
+                - LowStockTopic
+                - TopicName
+
+
+      Events:
+
+        ProductStream:
+          Type: DynamoDB
+          Properties:
+
+            Stream:
+              !GetAtt
+                - ProductsTable
+                - StreamArn
+
+            StartingPosition:
+              LATEST
+
+            BatchSize:
+              10
+
+            Enabled:
+              true
+
+
+Outputs:
+
+
+  ApiUrl:
+
+    Description:
+      CloudStock SAM API URL
+
+    Value: !Sub
+      "https://${CloudStockHttpApi}.execute-api.${AWS::Region}.amazonaws.com"
+
+
+  ProductsTableName:
+
+    Value:
+      !Ref ProductsTable
+
+
+  OrdersTableName:
+
+    Value:
+      !Ref OrdersTable
+
+
+  ProductImagesBucketName:
+
+    Value:
+      !Ref ProductImagesBucket
+
+
+  LowStockTopicArn:
+
+    Value:
+      !Ref LowStockTopic

@@ -1,0 +1,13 @@
+version = 0.1
+
+[default.deploy.parameters]
+stack_name = "cloudstock-sam"
+resolve_s3 = true
+s3_prefix = "cloudstock-sam"
+confirm_changeset = true
+capabilities = "CAPABILITY_IAM"
+image_repositories = []
+parameter_overrides = "CognitoUserPoolId=\"us-east-1_fLYstIaMn\" CognitoClientId=\"74558t7bmr7oq5l2657i9fvad3\""
+
+[default.global.parameters]
+region = "us-east-1"

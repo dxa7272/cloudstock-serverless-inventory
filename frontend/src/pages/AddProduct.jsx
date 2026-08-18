@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { useNavigate } from "react-router";
+
 import { createProduct } from "../services/api";
+
 
 function AddProduct() {
   const navigate = useNavigate();
@@ -17,94 +19,156 @@ function AddProduct() {
 
   const [error, setError] = useState("");
 
+
   function handleChange(event) {
+    const { name, value } = event.target;
+
     setForm({
       ...form,
-      [event.target.name]: event.target.value,
+      [name]: value,
     });
   }
+
 
   async function handleSubmit(event) {
     event.preventDefault();
 
     try {
+      setError("");
+
       await createProduct({
-        ...form,
+        productId: form.productId,
+        name: form.name,
+        sku: form.sku,
+        category: form.category,
         price: Number(form.price),
         quantity: Number(form.quantity),
         lowStockLevel: Number(form.lowStockLevel),
       });
 
       navigate("/products");
+
     } catch (err) {
       setError(err.message);
     }
   }
 
+
   return (
-    <div>
+    <div className="page">
+
       <h2>Add Product</h2>
 
-      {error && <p>{error}</p>}
 
-      <form onSubmit={handleSubmit}>
-        <input
-          name="productId"
-          placeholder="Product ID"
-          value={form.productId}
-          onChange={handleChange}
-        />
+      {error && (
+        <p className="error-message">
+          {error}
+        </p>
+      )}
 
-        <input
-          name="name"
-          placeholder="Name"
-          value={form.name}
-          onChange={handleChange}
-        />
 
-        <input
-          name="sku"
-          placeholder="SKU"
-          value={form.sku}
-          onChange={handleChange}
-        />
+      <form
+        className="form"
+        onSubmit={handleSubmit}
+      >
 
-        <input
-          name="category"
-          placeholder="Category"
-          value={form.category}
-          onChange={handleChange}
-        />
+        <label>
+          Product ID
+          <input
+            name="productId"
+            value={form.productId}
+            onChange={handleChange}
+            placeholder="prod-006"
+            required
+          />
+        </label>
 
-        <input
-          name="price"
-          type="number"
-          step="0.01"
-          placeholder="Price"
-          value={form.price}
-          onChange={handleChange}
-        />
 
-        <input
-          name="quantity"
-          type="number"
-          placeholder="Quantity"
-          value={form.quantity}
-          onChange={handleChange}
-        />
+        <label>
+          Name
+          <input
+            name="name"
+            value={form.name}
+            onChange={handleChange}
+            required
+          />
+        </label>
 
-        <input
-          name="lowStockLevel"
-          type="number"
-          placeholder="Low Stock Level"
-          value={form.lowStockLevel}
-          onChange={handleChange}
-        />
 
-        <button type="submit">Add Product</button>
+        <label>
+          SKU
+          <input
+            name="sku"
+            value={form.sku}
+            onChange={handleChange}
+            required
+          />
+        </label>
+
+
+        <label>
+          Category
+          <input
+            name="category"
+            value={form.category}
+            onChange={handleChange}
+            required
+          />
+        </label>
+
+
+        <label>
+          Price
+          <input
+            name="price"
+            type="number"
+            step="0.01"
+            min="0"
+            value={form.price}
+            onChange={handleChange}
+            required
+          />
+        </label>
+
+
+        <label>
+          Quantity
+          <input
+            name="quantity"
+            type="number"
+            min="0"
+            value={form.quantity}
+            onChange={handleChange}
+            required
+          />
+        </label>
+
+
+        <label>
+          Low Stock Level
+          <input
+            name="lowStockLevel"
+            type="number"
+            min="0"
+            value={form.lowStockLevel}
+            onChange={handleChange}
+            required
+          />
+        </label>
+
+
+        <button
+          className="primary-button"
+          type="submit"
+        >
+          Create Product
+        </button>
+
       </form>
+
     </div>
   );
 }
+
 
 export default AddProduct;

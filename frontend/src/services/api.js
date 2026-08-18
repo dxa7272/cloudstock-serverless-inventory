@@ -2,11 +2,13 @@ import { fetchAuthSession } from "aws-amplify/auth";
 
 const API_URL = import.meta.env.VITE_API_URL;
 
+
 async function getToken() {
   const session = await fetchAuthSession();
 
   return session.tokens?.accessToken?.toString();
 }
+
 
 async function request(path, options = {}, authenticated = true) {
   const headers = {
@@ -18,7 +20,7 @@ async function request(path, options = {}, authenticated = true) {
     const token = await getToken();
 
     if (!token) {
-      throw new Error("You must be signed in to perform this action.");
+      throw new Error("You must be signed in.");
     }
 
     headers.Authorization = `Bearer ${token}`;
@@ -42,12 +44,11 @@ async function request(path, options = {}, authenticated = true) {
   }
 
   if (!response.ok) {
-    const message =
+    throw new Error(
       data?.message ||
-      data?.error ||
-      `Request failed with status ${response.status}`;
-
-    throw new Error(message);
+        data?.error ||
+        `Request failed with status ${response.status}`
+    );
   }
 
   return data;
@@ -115,7 +116,9 @@ export function createOrder(order) {
     body: JSON.stringify(order),
   });
 }
-
+export function getOrders() {
+  return request("/orders");
+}
 
 // ============================================================
 // ANALYTICS

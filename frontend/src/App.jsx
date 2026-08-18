@@ -1,4 +1,9 @@
-import { Navigate, Route, Routes } from "react-router";
+import {
+  Navigate,
+  Route,
+  Routes,
+} from "react-router";
+
 import Login from "./pages/Login";
 import Layout from "./components/Layout";
 import Dashboard from "./pages/Dashboard";
@@ -16,19 +21,48 @@ function App() {
         <Route element={<Layout />}>
           <Route
             path="/"
-            element={<Navigate to="/dashboard" replace />}
+            element={
+              <Navigate
+                to="/dashboard"
+                replace
+              />
+            }
           />
 
-          <Route path="/dashboard" element={<Dashboard />} />
-          <Route path="/products" element={<Products />} />
-          <Route path="/products/new" element={<AddProduct />} />
+          <Route
+            path="/dashboard"
+            element={<Dashboard />}
+          />
+
+          <Route
+            path="/products"
+            element={<Products />}
+          />
+
+          <Route
+            path="/products/new"
+            element={<AddProduct />}
+          />
+
           <Route
             path="/products/:productId/edit"
             element={<EditProduct />}
           />
-          <Route path="/orders" element={<Orders />} />
-          <Route path="/orders/new" element={<CreateOrder />} />
-          <Route path="/analytics" element={<Analytics />} />
+
+          <Route
+            path="/orders"
+            element={<Orders />}
+          />
+
+          <Route
+            path="/orders/new"
+            element={<CreateOrder />}
+          />
+
+          <Route
+            path="/analytics"
+            element={<Analytics />}
+          />
         </Route>
       </Routes>
     </Login>
