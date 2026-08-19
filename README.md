@@ -51,3 +51,10 @@ AWS Lambda
 Amazon DynamoDB
 
 Deployed with AWS Amplify Hosting.
+## Live Demo
+
+CloudStock is deployed on AWS Amplify Hosting.
+
+Production URL:
+
+https://main.d9d191wcq4clk.amplifyapp.com
