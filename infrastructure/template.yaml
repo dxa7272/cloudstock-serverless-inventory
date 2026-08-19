@@ -27,7 +27,7 @@ Resources:
       CorsConfiguration:
         AllowOrigins:
           - "http://localhost:5173"
-          - "https://main.d37llxu4b92i3z.amplifyapp.com"
+          - "https://main.d9d191wcq4clk.amplifyapp.com"
 
         AllowHeaders:
           - "authorization"

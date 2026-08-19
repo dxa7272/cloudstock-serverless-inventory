@@ -50,3 +50,4 @@ AWS Lambda
       v
 Amazon DynamoDB
 
+Deployed with AWS Amplify Hosting.
